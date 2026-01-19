@@ -4,11 +4,13 @@
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
 # Lib (reference DLLs for local build only)
-Lib/BepInEx/
-Lib/MelonLoader/
-# Keep these for GitHub Actions build
-# Lib/Csv.dll
-# Lib/sourcehanserifk.unity3d
+Lib/*
+!Lib/README.md
+!Lib/sourcehanserifk.unity3d
+!Lib/BepInEx/core/README.md
+!Lib/BepInEx/interop/README.md
+!Lib/MelonLoader/Il2CppAssemblies/README.md
+!Lib/MelonLoader/net6/README.md
 
 # User-specific files
 *.rsuser

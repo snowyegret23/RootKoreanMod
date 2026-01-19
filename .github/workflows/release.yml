@@ -1,0 +1,103 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '6.0.x'
+
+    - name: Extract version from BepInEx ModMain.cs
+      id: version
+      shell: pwsh
+      run: |
+        $content = Get-Content "RootKoreanMod.BepInEx/ModMain.cs" -Raw
+        if ($content -match 'PLUGIN_VERSION\s*=\s*"([^"]+)"') {
+          $version = $matches[1]
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "Detected version: $version"
+        } else {
+          echo "Failed to extract version"
+          exit 1
+        }
+
+    - name: Build Release
+      run: dotnet build -c Release
+
+    - name: Create BepInEx package
+      shell: pwsh
+      run: |
+        $version = "${{ steps.version.outputs.VERSION }}"
+
+        # BepInEx 폴더 구조 생성
+        New-Item -ItemType Directory -Force -Path "release/BepInEx/BepInEx/plugins"
+
+        # 파일 복사
+        Copy-Item "RootKoreanMod.BepInEx/bin/Release/net6.0/RootKoreanMod.dll" "release/BepInEx/BepInEx/plugins/"
+        Copy-Item "RootKoreanMod.Shared/bin/Release/net6.0/RootKoreanMod.Shared.dll" "release/BepInEx/BepInEx/plugins/"
+        Copy-Item "Lib/Csv.dll" "release/BepInEx/BepInEx/plugins/"
+        Copy-Item "Lib/sourcehanserifk.unity3d" "release/BepInEx/BepInEx/plugins/"
+
+        # ZIP 생성
+        Compress-Archive -Path "release/BepInEx/BepInEx" -DestinationPath "release/BepInEx-$version.zip"
+
+    - name: Create MelonLoader package
+      shell: pwsh
+      run: |
+        $version = "${{ steps.version.outputs.VERSION }}"
+
+        # MelonLoader 폴더 구조 생성
+        New-Item -ItemType Directory -Force -Path "release/MelonLoader/Mods"
+        New-Item -ItemType Directory -Force -Path "release/MelonLoader/UserLibs"
+
+        # 파일 복사
+        Copy-Item "RootKoreanMod.MelonLoader/bin/Release/net6.0/RootKoreanMod.dll" "release/MelonLoader/Mods/"
+        Copy-Item "RootKoreanMod.Shared/bin/Release/net6.0/RootKoreanMod.Shared.dll" "release/MelonLoader/Mods/"
+        Copy-Item "Lib/sourcehanserifk.unity3d" "release/MelonLoader/Mods/"
+        Copy-Item "Lib/Csv.dll" "release/MelonLoader/UserLibs/"
+
+        # ZIP 생성
+        Compress-Archive -Path "release/MelonLoader/Mods", "release/MelonLoader/UserLibs" -DestinationPath "release/MelonLoader-$version.zip"
+
+    - name: Create Git Tag
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git tag -a "v${{ steps.version.outputs.VERSION }}" -m "Release v${{ steps.version.outputs.VERSION }}"
+        git push origin "v${{ steps.version.outputs.VERSION }}"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.version.outputs.VERSION }}
+        name: v${{ steps.version.outputs.VERSION }}
+        body: |
+          ## RootKoreanMod v${{ steps.version.outputs.VERSION }}
+
+          ### 설치 방법
+
+          **MelonLoader 사용자:**
+          1. `MelonLoader-${{ steps.version.outputs.VERSION }}.zip` 다운로드
+          2. 게임 폴더에 압축 해제
+
+          **BepInEx 사용자:**
+          1. `BepInEx-${{ steps.version.outputs.VERSION }}.zip` 다운로드
+          2. 게임 폴더에 압축 해제
+        files: |
+          release/BepInEx-${{ steps.version.outputs.VERSION }}.zip
+          release/MelonLoader-${{ steps.version.outputs.VERSION }}.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
